@@ -45,15 +45,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   darkMode.addEventListener('click', clickDarkMode);
   knownOnly.addEventListener('click', clickKnownOnly);
 
-  if ('bluetooth' in navigator) {
-    const notSupported = document.getElementById('notSupported');
-    notSupported.classList.add('hidden');
-  }
-
   loadAllSettings();
   updateTheme();
   await updateAllPanels();
   //createMockPanels();
+});
+
+async function cleanup() {
+  if (device && device.gatt.connected) {
+    logMsg('Cleaning up connection...');
+    for (let panelId of activePanels) {
+      if (typeof panels[panelId].polling !== 'undefined') {
+        clearInterval(panels[panelId].polling);
+      }
+    }
+    await device.gatt.disconnect();
+  }
+}
+
+window.addEventListener('pagehide', cleanup);
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    cleanup();
+  }
+});
+
+window.addEventListener('error', (event) => {
+  logMsg('Error: ' + event.message);
 });
 
 const boards = {
@@ -283,6 +301,7 @@ let panels = {
     data: {R:[],G:[],B:[]},
     properties: ['write'],
   },
+/*
   'model3d': {
     title: '3D Model',
     serviceId: '0d00',
@@ -297,6 +316,7 @@ let panels = {
     },
     measurementPeriod: 200,
   },
+*/
 };
 
 function playSound(frequency, duration, callback) {
@@ -402,6 +422,11 @@ async function connect() {
     reset();
 
     for (let panelId of activePanels) {
+      if (!device || !device.gatt.connected) {
+        logMsg('Connection lost during setup.');
+        return;
+      }
+
       let service = await server.getPrimaryService(getFullId(panels[panelId].serviceId)).catch(error => {console.log(error);});
       if (service) {
         panels[panelId].characteristic = await service.getCharacteristic(getFullId(panels[panelId].characteristicId)).catch(error => {console.log(error);});
@@ -423,17 +448,31 @@ async function connect() {
         if (panels[panelId].properties.includes("notify")) {
           if (panels[panelId].measurementPeriod !== undefined) {
             let mpChar = await service.getCharacteristic(getFullId(measurementPeriodId)).catch(error => {console.log(error);});
-            let view = new DataView(new ArrayBuffer(4));
-            view.setInt32(0, panels[panelId].measurementPeriod, true);
-            mpChar.writeValue(view.buffer)
-              .catch(error => {console.log(error);})
-              .then(_ => {
-              logMsg("Changed measurement period for " + ucWords(panelId) + " to " + panels[panelId].measurementPeriod + "ms");
-            });
+            if (mpChar) {
+              let view = new DataView(new ArrayBuffer(4));
+              view.setInt32(0, panels[panelId].measurementPeriod, true);
+              await mpChar.writeValue(view.buffer)
+                .catch(error => {console.log('Error setting period: ' + error.message);})
+                .then(_ => {
+                logMsg("Changed measurement period for " + ucWords(panelId) + " to " + panels[panelId].measurementPeriod + "ms");
+              });
+              await new Promise(resolve => setTimeout(resolve, 200));
+            }
           }
+
+          if (!device || !device.gatt.connected) break;
+
           logMsg('Starting notifications for ' + ucWords(panelId));
-          await panels[panelId].characteristic.startNotifications();
-          panels[panelId].characteristic.addEventListener('characteristicvaluechanged', function(event){handleIncoming(panelId, event.target.value);});
+          try {
+            // Significant delay to allow the Bluetooth stack to breathe
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await panels[panelId].characteristic.startNotifications();
+            logMsg('Notifications started for ' + ucWords(panelId));
+            panels[panelId].characteristic.addEventListener('characteristicvaluechanged', function(event){handleIncoming(panelId, event.target.value);});
+          } catch (error) {
+            logMsg('Error starting notifications for ' + ucWords(panelId) + ': ' + error.message);
+            console.error(error);
+          }
         }
         if (panels[panelId].properties.includes("read")) {
           let intervalPeriod = 1000;
@@ -441,6 +480,10 @@ async function connect() {
             intervalPeriod = panels[panelId].measurementPeriod;
           }
           panels[panelId].polling = setInterval(function() {
+            if (!device || !device.gatt.connected) {
+              clearInterval(panels[panelId].polling);
+              return;
+            }
             if (!panels[panelId].readInProgress) {
               panels[panelId].readInProgress = true;
             panels[panelId].characteristic.readValue()
@@ -453,15 +496,19 @@ async function connect() {
         }
       }
     }
-    readActiveSensors();
+    if (device && device.gatt.connected) {
+      await readActiveSensors();
+    }
   }
 }
 
 async function readActiveSensors() {
+  if (!device || !device.gatt.connected) return;
   for (let panelId of activePanels) {
+    if (!device || !device.gatt.connected) break;
     let panel = panels[panelId];
     if (panels[panelId].properties.includes("read") || panels[panelId].properties.includes("notify")) {
-      await panels[panelId].characteristic.readValue().then(function(data){handleIncoming(panelId, data);});
+      await panels[panelId].characteristic.readValue().then(function(data){handleIncoming(panelId, data);}).catch(error => {});
     }
   }
 }
@@ -594,6 +641,7 @@ async function clickConnect() {
 
 async function onDisconnected(event) {
   let disconnectedDevice = event.target;
+  console.log('Device disconnected:', disconnectedDevice);
 
   for (let panelId of activePanels) {
     if (typeof panels[panelId].polling !== 'undefined') {
@@ -605,7 +653,11 @@ async function onDisconnected(event) {
   destroyPanels();
 
   toggleUIConnected(false);
-  logMsg('Device ' + disconnectedDevice.name + ' is disconnected.');
+  logMsg('Device ' + (disconnectedDevice.name || 'Sense') + ' is disconnected.');
+  
+  if (device && device.gatt.connected) {
+    logMsg('Note: GATT server still thinks it is connected.');
+  }
 
   device = undefined;
   currentBoard = undefined;
@@ -994,7 +1046,7 @@ function create3dPanel(panelId) {
 
   {
     const gltfLoader = new GLTFLoader();
-    gltfLoader.load('https://cdn.glitch.com/eeed3166-9759-4ba5-ba6b-aed272d6db80%2Fbunny.glb', (gltf) => {
+    gltfLoader.load('assets/bunny.glb', (gltf) => {
       const root = gltf.scene;
       panels[panelId].model = root;
       panels[panelId].scene.add(root);
