@@ -64,11 +64,6 @@ async function cleanup() {
 }
 
 window.addEventListener('pagehide', cleanup);
-window.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    cleanup();
-  }
-});
 
 window.addEventListener('error', (event) => {
   logMsg('Error: ' + event.message);
