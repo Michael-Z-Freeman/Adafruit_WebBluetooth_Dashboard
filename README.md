@@ -1,11 +1,7 @@
 # Fixing the Adafruit WebBluetooth Dashboard
 I'm using a Adafruit Feather nRF52840 Sense. Fixes in progress !
 
-
-
-Uploading dashboard.mp4…
-
-
+https://github.com/user-attachments/assets/9a5cf8cd-abbd-4426-ba2a-0c9a7e3de445
 
 # Adafruit WebBluetooth Dashboard
 A Web Bluetooth Dashboard for easily testing sensors. Source files for the Adafruit WebBluetooth Dashboard available at: https://adafruit.github.io/Adafruit_WebBluetooth_Dashboard/.
