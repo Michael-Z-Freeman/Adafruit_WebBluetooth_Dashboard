@@ -500,6 +500,7 @@ void loop()
     lastBatteryUpdate = millis();
     uint8_t batt = read_battery_percentage();
     blebas.write(batt);
+    blebas.notify(batt);
     
     // Print battery info to Serial Monitor
     Serial.print("Battery Raw ADC: ");
