@@ -89,6 +89,7 @@ BLEAdafruitGesture    bleGesture;
 BLEAdafruitHumid      bleHumid;
 BLEAdafruitProximity  bleProximity;
 BLEAdafruitQuaternion bleQuater;
+BLEAdafruitGyro       bleGyro;
 
 Adafruit_LSM6DS33 lsm6ds33; // Gyro and Accel
 Adafruit_LIS3MDL  lis3mdl;  // Magnetometer
@@ -205,6 +206,18 @@ uint16_t measure_humid(uint8_t* buf, uint16_t bufsize)
   float humid = sht30.readHumidity();
   memcpy(buf, &humid, 4);
   return 4;
+}
+
+uint16_t measure_gyro(uint8_t* buf, uint16_t bufsize)
+{
+  sensors_event_t accel;
+  sensors_event_t gyro;
+  sensors_event_t temp;
+  lsm6ds33.getEvent(&accel, &gyro, &temp);
+
+  float data[3] = { gyro.gyro.x, gyro.gyro.y, gyro.gyro.z };
+  memcpy(buf, data, min(bufsize, (uint16_t)12));
+  return 12;
 }
 
 #else
@@ -415,6 +428,7 @@ void setup()
   bleGesture.setNotifyCallback(gesture_enable_callback);
 
   bleHumid.begin(measure_humid, 100);
+  bleGyro.begin(measure_gyro, 100);
 
   bleLight.begin(measure_light, 100);;
   bleLight.setNotifyCallback(light_enable_callback);
