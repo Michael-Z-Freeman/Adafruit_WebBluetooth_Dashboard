@@ -324,6 +324,8 @@ void setup()
 
   // Button
   pinMode(PIN_BUTTON1, INPUT_PULLUP);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH); // Turn on Red LED to show device is ON
 #if defined(PIN_BUTTON2)
   pinMode(PIN_BUTTON2, INPUT_PULLUP);
 #endif
@@ -495,6 +497,32 @@ void startAdv(void)
 
 void loop()
 {
+  // Check if the board button is held for 2 seconds to enter deep sleep
+  if (digitalRead(PIN_BUTTON1) == LOW) {
+    unsigned long pressStart = millis();
+    while (digitalRead(PIN_BUTTON1) == LOW) {
+      if (millis() - pressStart > 2000) {
+        // Turn off Neopixels and Red LED before sleeping
+        strip.clear();
+        strip.show();
+        digitalWrite(LED_BUILTIN, LOW); // Turn off Red LED to show device is in sleep
+        
+        // Wait for user to release the button
+        while (digitalRead(PIN_BUTTON1) == LOW) {
+          delay(10);
+        }
+        delay(100); // Debounce
+        
+        // Enter Nordic System OFF mode (deep sleep).
+        // Waking up is done by pressing the Reset button (nearest to USB).
+        // Using the User button for wakeup is avoided because it triggers
+        // the UF2 Bootloader DFU mode (Green LED) when held during boot.
+        sd_power_system_off();
+      }
+      delay(10);
+    }
+  }
+
   // Update the battery level and print sensor data every 10 seconds
   if (millis() - lastBatteryUpdate > 10000) {
     lastBatteryUpdate = millis();
