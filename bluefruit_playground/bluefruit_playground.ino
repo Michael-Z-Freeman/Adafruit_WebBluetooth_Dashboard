@@ -252,6 +252,24 @@ uint16_t measure_sound(uint8_t* buf, uint16_t bufsize)
   return len;
 }
 
+uint8_t read_battery_percentage() {
+#if defined(ARDUINO_NRF52840_CIRCUITPLAY)
+  float voltage = CircuitPlayground.batteryVoltage();
+#else
+  // For CLUE & Feather Sense
+  float raw = analogRead(A6);
+  float voltage = (raw * 3.6 / 1024.0) * 2.0;
+#endif
+
+  // LiPo battery voltage ranges from ~3.2V (0%) to 4.2V (100%)
+  int percentage = (int) ((voltage - 3.2) / (4.2 - 3.2) * 100.0);
+  if (percentage > 100) percentage = 100;
+  if (percentage < 0) percentage = 0;
+  
+  return (uint8_t) percentage;
+}
+
+unsigned long lastBatteryUpdate = 0;
 
 //--------------------------------------------------------------------+
 // Codes
@@ -441,7 +459,19 @@ void startAdv(void)
 
 void loop()
 {
-
+  // Update the battery level every 10 seconds
+  if (millis() - lastBatteryUpdate > 10000) {
+    lastBatteryUpdate = millis();
+    uint8_t batt = read_battery_percentage();
+    blebas.write(batt);
+    
+    // Print to Serial Monitor for debugging
+    Serial.print("Battery Raw ADC: ");
+    Serial.print(analogRead(A6));
+    Serial.print(" | Percentage: ");
+    Serial.print(batt);
+    Serial.println("%");
+  }
 }
 
 // callback invoked when central connects
