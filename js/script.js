@@ -509,6 +509,17 @@ async function readActiveSensors() {
 }
 
 function handleIncoming(panelId, value) {
+  if (panelId === 'accelerometer') {
+    let vals = [];
+    try {
+      for (let offset = 0; offset < value.byteLength; offset += 4) {
+        vals.push(value.getFloat32(offset, true));
+      }
+      console.log('Accelerometer values received:', vals);
+    } catch (e) {
+      console.error('Error parsing accelerometer value:', e);
+    }
+  }
   const columns = Object.keys(panels[panelId].data);
   const typeMap = {
     "Uint8":    {fn: DataView.prototype.getUint8,    bytes: 1},

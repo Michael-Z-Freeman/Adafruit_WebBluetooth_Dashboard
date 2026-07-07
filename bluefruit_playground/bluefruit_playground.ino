@@ -252,6 +252,28 @@ uint16_t measure_sound(uint8_t* buf, uint16_t bufsize)
   return len;
 }
 
+uint16_t measure_accel(uint8_t* buf, uint16_t bufsize)
+{
+  float x = 0, y = 0, z = 0;
+#if defined(ARDUINO_NRF52840_CIRCUITPLAY)
+  x = CircuitPlayground.motionX();
+  y = CircuitPlayground.motionY();
+  z = CircuitPlayground.motionZ();
+#else
+  sensors_event_t accel;
+  sensors_event_t gyro;
+  sensors_event_t temp;
+  lsm6ds33.getEvent(&accel, &gyro, &temp);
+  x = accel.acceleration.x;
+  y = accel.acceleration.y;
+  z = accel.acceleration.z;
+#endif
+
+  float data[3] = { x, y, z };
+  memcpy(buf, data, min(bufsize, (uint16_t)12));
+  return 12;
+}
+
 uint8_t read_battery_percentage() {
 #if defined(ARDUINO_NRF52840_CIRCUITPLAY)
   float voltage = CircuitPlayground.batteryVoltage();
@@ -367,7 +389,7 @@ void setup()
   blebas.write(100);
 
   //------------- Adafruit Service -------------//
-  bleAccel.begin(accel_sensor, 100); // TODO dropped in favor to Quaternion service for CLUE & Sense
+  bleAccel.begin(measure_accel, 100); // Uses callback instead of raw sensor to avoid LSM6DS33 timer conflict
 
   bleButton.begin(measure_button, 100);
   bleButton.setPeriod(0); // only notify if there is changes with buttons
@@ -459,18 +481,30 @@ void startAdv(void)
 
 void loop()
 {
-  // Update the battery level every 10 seconds
+  // Update the battery level and print sensor data every 10 seconds
   if (millis() - lastBatteryUpdate > 10000) {
     lastBatteryUpdate = millis();
     uint8_t batt = read_battery_percentage();
     blebas.write(batt);
     
-    // Print to Serial Monitor for debugging
+    // Print battery info to Serial Monitor
     Serial.print("Battery Raw ADC: ");
     Serial.print(analogRead(A6));
     Serial.print(" | Percentage: ");
     Serial.print(batt);
     Serial.println("%");
+
+    // Read and print Accelerometer data
+    sensors_event_t accel;
+    sensors_event_t gyro;
+    sensors_event_t temp;
+    lsm6ds33.getEvent(&accel, &gyro, &temp);
+    Serial.print("Accel X: ");
+    Serial.print(accel.acceleration.x);
+    Serial.print(" | Y: ");
+    Serial.print(accel.acceleration.y);
+    Serial.print(" | Z: ");
+    Serial.println(accel.acceleration.z);
   }
 }
 
