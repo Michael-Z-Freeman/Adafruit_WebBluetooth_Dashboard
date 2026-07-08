@@ -516,6 +516,24 @@ void loop()
         Serial.println("Entering System OFF...");
         Serial.flush();
 
+        // 1. Power down sensors
+#if defined(ARDUINO_NRF52840_CLUE) || defined(ARDUINO_NRF52840_FEATHER_SENSE)
+        lsm6ds33.setAccelDataRate(LSM6DS_RATE_SHUTDOWN);
+        lsm6ds33.setGyroDataRate(LSM6DS_RATE_SHUTDOWN);
+        lis3mdl.setOperationMode(LIS3MDL_POWERDOWNMODE);
+        apds9960.enable(false);
+        bmp280.setSampling(Adafruit_BMP280::MODE_SLEEP);
+#endif
+
+        // 2. Power down external SPI Flash
+        flashTransport.runCommand(0xB9); // Send Deep Power-Down command (0xB9) to SPI flash chip
+        flash.end();                     // Uninitialize flash driver and uninit QSPI peripheral
+
+#if defined(PIN_QSPI_CS)
+        pinMode(PIN_QSPI_CS, OUTPUT);
+        digitalWrite(PIN_QSPI_CS, HIGH); // Explicitly drive QSPI CS high to prevent floating/leakage
+#endif
+
         // Enter Nordic System OFF mode (deep sleep).
         // Waking up is done by pressing the Reset button (nearest to USB).
         sd_power_system_off();
