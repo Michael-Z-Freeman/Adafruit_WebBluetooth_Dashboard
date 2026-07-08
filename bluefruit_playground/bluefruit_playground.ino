@@ -513,11 +513,21 @@ void loop()
         }
         delay(100); // Debounce
         
+        Serial.println("Entering System OFF...");
+        Serial.flush();
+
         // Enter Nordic System OFF mode (deep sleep).
         // Waking up is done by pressing the Reset button (nearest to USB).
-        // Using the User button for wakeup is avoided because it triggers
-        // the UF2 Bootloader DFU mode (Green LED) when held during boot.
         sd_power_system_off();
+        
+        // Fallback: If sd_power_system_off() returns/fails (e.g. if SoftDevice is busy),
+        // force System OFF directly via the hardware register.
+        NRF_POWER->SYSTEMOFF = 1;
+        
+        // If it still hasn't shut down, halt execution to prevent battery drain
+        while (1) {
+          __WFI(); // Wait for Interrupt (enters sleep mode of the CPU core)
+        }
       }
       delay(10);
     }
