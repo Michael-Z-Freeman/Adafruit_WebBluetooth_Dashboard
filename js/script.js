@@ -114,10 +114,16 @@ let panels = {
     },
     update: function(panelId) {
       let panelElement = document.querySelector("#dashboard > #" + panelId);
+      
+      // If we have new data, keep only the latest value to prevent leakage
+      if (panels[panelId].data.battery.length > 0) {
+        let val = panels[panelId].data.battery.pop();
+        panels[panelId].data.battery = [val];
+      }
+
       let value = null;
       if (panels[panelId].data.battery.length > 0) {
-        value = panels[panelId].data.battery.pop();
-        panels[panelId].data.battery = [];
+        value = panels[panelId].data.battery[0];
       }
 
       if (value != null && value <= 25) { // Show Red
@@ -137,9 +143,26 @@ let panels = {
         panelElement.querySelector(".content .battery").title = 'Battery Level: ?';
       } else {
         panelElement.querySelector(".content .battery .level").style.width = value + '%';
-        value = panels[panelId].textFormat(value);
-        panelElement.querySelector(".content .percentage").innerHTML = value;
-        panelElement.querySelector(".content .battery").title = 'Battery Level: ' + value;
+        let formattedVal = panels[panelId].textFormat(value);
+        
+        let isUsb = (buttonState & 0x10) !== 0;
+        let isCharging = (buttonState & 0x20) !== 0;
+        
+        let statusText = '';
+        let titleSuffix = '';
+        if (isCharging) {
+          statusText = '<span style="font-size: 0.65em; opacity: 0.9; display: block; margin-top: 4px; color: #e67e22;">Charging</span>';
+          titleSuffix = ' (Charging)';
+        } else if (isUsb) {
+          statusText = '<span style="font-size: 0.65em; opacity: 0.9; display: block; margin-top: 4px; color: #2ecc71;">Full (USB)</span>';
+          titleSuffix = ' (Full / USB)';
+        } else {
+          statusText = '<span style="font-size: 0.65em; opacity: 0.7; display: block; margin-top: 4px; color: #7f8c8d;">Discharging</span>';
+          titleSuffix = ' (Discharging)';
+        }
+          
+        panelElement.querySelector(".content .percentage").innerHTML = formattedVal + statusText;
+        panelElement.querySelector(".content .battery").title = 'Battery Level: ' + formattedVal + titleSuffix;
       }
     },
   },
@@ -151,12 +174,15 @@ let panels = {
     data: {temperature:[]},
     properties: ['notify'],
     textFormat: function(value) {
-      let isCharging = (buttonState & 0x10) !== 0;
+      let isUsb = (buttonState & 0x10) !== 0;
+      let isCharging = (buttonState & 0x20) !== 0;
       let text = numeral(value).format('0.00') + '&deg;C';
       if (isCharging) {
-        text += ' <span style="font-size: 0.75em; opacity: 0.8; display: block; margin-top: 4px; color: #e67e22;">(Calibrated: -12.2&deg;C charging offset)</span>';
+        text += ' <span style="font-size: 11px; font-weight: normal; opacity: 0.85; display: block; margin-top: 3px; color: #e67e22;">Cal: -7.5&deg;C (Charging)</span>';
+      } else if (isUsb) {
+        text += ' <span style="font-size: 11px; font-weight: normal; opacity: 0.85; display: block; margin-top: 3px; color: #3498db;">Cal: -4.0&deg;C (USB)</span>';
       } else {
-        text += ' <span style="font-size: 0.75em; opacity: 0.8; display: block; margin-top: 4px; color: #2ecc71;">(Calibrated: -2.5&deg;C battery offset)</span>';
+        text += ' <span style="font-size: 11px; font-weight: normal; opacity: 0.85; display: block; margin-top: 3px; color: #2ecc71;">Cal: -2.5&deg;C (Batt)</span>';
       }
       return text;
     },
@@ -226,6 +252,10 @@ let panels = {
       buttonState = panels[panelId].data.buttonState.pop();
       if (panels.switch.condition()) {
         panels.switch.update('switch'); // Update the switch because we aren't doing 2 notifys
+      }
+      // Update battery panel to reflect charging status instantly
+      if (panels.battery.rendered) {
+        panels.battery.update('battery');
       }
       // Match the buttons to the values
       for (let i = 1; i <= currentBoard.buttons; i++) {

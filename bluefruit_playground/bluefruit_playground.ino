@@ -198,10 +198,16 @@ uint16_t measure_button(uint8_t* buf, uint16_t bufsize)
   button |= ( digitalRead(PIN_BUTTON2) ? 0x00 : 0x04 );
 #endif
 
-  // Check if USB is connected (battery is charging)
-  bool is_charging = (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk);
-  if (is_charging) {
-    button |= 0x10; // Use bit 4 (0x10) to represent charging status
+  // Check USB connection and charging status
+  bool is_usb = (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk);
+  if (is_usb) {
+    button |= 0x10; // Bit 4: USB Power Connected
+    
+    // Check if battery is actively bulk charging (< 95%)
+    uint8_t batt = read_battery_percentage();
+    if (batt < 95) {
+      button |= 0x20; // Bit 5: Actively Charging
+    }
   }
 
   memcpy(buf, &button, 4);
@@ -231,16 +237,22 @@ uint16_t measure_temperature(uint8_t* buf, uint16_t bufsize)
 {
   float temp = bmp280.readTemperature();
   
-  // Check if USB is connected (battery is charging)
-  bool is_charging = (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk);
+  // Check USB connection
+  bool is_usb = (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk);
   
   // Apply a dynamic self-heating calibration offset:
   // - On battery power: subtract 2.5 degrees C
-  // - On USB power (charging): subtract 12.2 degrees C
-  if (is_charging) {
-    temp = temp - 12.2;
+  // - On USB power (fully charged / idle): subtract 4.0 degrees C
+  // - On USB power (actively charging, batt < 95%): subtract 7.5 degrees C
+  if (is_usb) {
+    uint8_t batt = read_battery_percentage();
+    if (batt < 95) {
+      temp = temp - 7.5; // Active charging
+    } else {
+      temp = temp - 4.0; // USB Connected, but fully charged (idle)
+    }
   } else {
-    temp = temp - 2.5;
+    temp = temp - 2.5; // Running on battery
   }
   
   memcpy(buf, &temp, 4);

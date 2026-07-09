@@ -177,16 +177,17 @@ div.clear {
 }
 
 #dashboard .graph .text {
-  text-overflow: ellipsis;
-  white-space: nowrap;
   overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: flex-end;
+  text-align: center;
 }
 
 #dashboard .graph .text p {
   padding: 10px;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 #log {
