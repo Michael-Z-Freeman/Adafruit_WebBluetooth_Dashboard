@@ -197,6 +197,13 @@ uint16_t measure_button(uint8_t* buf, uint16_t bufsize)
 #if defined(PIN_BUTTON2)
   button |= ( digitalRead(PIN_BUTTON2) ? 0x00 : 0x04 );
 #endif
+
+  // Check if USB is connected (battery is charging)
+  bool is_charging = (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk);
+  if (is_charging) {
+    button |= 0x10; // Use bit 4 (0x10) to represent charging status
+  }
+
   memcpy(buf, &button, 4);
   return 4;
 }
@@ -218,6 +225,26 @@ uint16_t measure_gyro(uint8_t* buf, uint16_t bufsize)
   float data[3] = { gyro.gyro.x, gyro.gyro.y, gyro.gyro.z };
   memcpy(buf, data, min(bufsize, (uint16_t)12));
   return 12;
+}
+
+uint16_t measure_temperature(uint8_t* buf, uint16_t bufsize)
+{
+  float temp = bmp280.readTemperature();
+  
+  // Check if USB is connected (battery is charging)
+  bool is_charging = (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk);
+  
+  // Apply a dynamic self-heating calibration offset:
+  // - On battery power: subtract 2.5 degrees C
+  // - On USB power (charging): subtract 12.2 degrees C
+  if (is_charging) {
+    temp = temp - 12.2;
+  } else {
+    temp = temp - 2.5;
+  }
+  
+  memcpy(buf, &temp, 4);
+  return 4;
 }
 
 #else
@@ -446,7 +473,7 @@ void setup()
   bleQuater.begin(&filter, accel_sensor, lsm6ds33.getGyroSensor(), &lis3mdl);
   bleQuater.setCalibration(&cal);
 
-  bleTemp.begin(bmp280.getTemperatureSensor(), 100);
+  bleTemp.begin(measure_temperature, 100);
 #endif
 
 #if defined(PIN_BUZZER)

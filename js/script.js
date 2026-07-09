@@ -151,7 +151,14 @@ let panels = {
     data: {temperature:[]},
     properties: ['notify'],
     textFormat: function(value) {
-      return numeral(value).format('0.00') + '&deg; C';
+      let isCharging = (buttonState & 0x10) !== 0;
+      let text = numeral(value).format('0.00') + '&deg;C';
+      if (isCharging) {
+        text += ' <span style="font-size: 0.75em; opacity: 0.8; display: block; margin-top: 4px; color: #e67e22;">(Calibrated: -12.2&deg;C charging offset)</span>';
+      } else {
+        text += ' <span style="font-size: 0.75em; opacity: 0.8; display: block; margin-top: 4px; color: #2ecc71;">(Calibrated: -2.5&deg;C battery offset)</span>';
+      }
+      return text;
     },
   },
   light: {
