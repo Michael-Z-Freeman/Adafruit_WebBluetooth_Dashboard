@@ -305,12 +305,16 @@ uint8_t read_battery_percentage() {
 }
 
 unsigned long lastBatteryUpdate = 0;
+uint32_t boot_reset_reason = 0;
 
 //--------------------------------------------------------------------+
 // Codes
 //--------------------------------------------------------------------+
 void setup()
 {
+  boot_reset_reason = NRF_POWER->RESETREAS;
+  NRF_POWER->RESETREAS = 0xFFFFFFFF; // Clear reset reasons for next time
+
   Adafruit_Sensor* accel_sensor;
 
   Serial.begin(115200);
@@ -559,6 +563,9 @@ void loop()
     blebas.notify(batt);
     
     // Print battery info to Serial Monitor
+    Serial.print("Boot Reset Reason: 0x");
+    Serial.println(boot_reset_reason, HEX);
+
     Serial.print("Battery Raw ADC: ");
     Serial.print(analogRead(A6));
     Serial.print(" | Percentage: ");
