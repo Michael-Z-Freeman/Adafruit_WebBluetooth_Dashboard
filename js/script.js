@@ -48,7 +48,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadAllSettings();
   updateTheme();
   await updateAllPanels();
-  //createMockPanels();
+  
+  // Auto-connect to previously paired device if available
+  if ('bluetooth' in navigator) {
+    try {
+      const devices = await navigator.bluetooth.getDevices();
+      if (devices.length > 0) {
+        logMsg("Found previously paired device: " + devices[0].name);
+        device = devices[0];
+        await connect().then(_ => {
+          toggleUIConnected(true);
+        }).catch(err => {
+          logMsg("Auto-connect failed (device might be off or out of range).");
+          device = null;
+        });
+      }
+    } catch (err) {
+      console.log("Error checking paired devices:", err);
+    }
+  }
 });
 
 async function cleanup() {
